@@ -5,7 +5,6 @@ from typing import Annotated
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 from langgraph.graph import END
-import json
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -17,6 +16,8 @@ class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     current_node: int | None
     user_info: dict | None
+    user_name: str | None
+    next_node: bool
 
 class UserName(BaseModel):
     name: str | None = Field(description="User's name")
@@ -30,7 +31,8 @@ def starting_point(state: State) -> State:
     return {
         **state, 
         "messages": new_messages,
-        "current_node": 1
+        "current_node": 1,
+        "next_node": True
     }
 
 def ask_name(state: State) -> State:
@@ -54,12 +56,14 @@ def ask_name(state: State) -> State:
                     **state,
                     "messages": messages + [AIMessage(content=f"Thank you, {name}! Let's proceed.")],
                     "user_name": name,
-                    "current_node": 2
+                    "current_node": 2,
+                    "next_node": True
                 }
             else:
                 return {
                     **state,
                     "messages": messages + [AIMessage(content="I didn't catch your name. Could you please share your name?")],
+                    "next_node": False
                 }
         except Exception as e :
             print(f"Error: {e}")
@@ -74,7 +78,8 @@ def ask_name(state: State) -> State:
         return {
             **state, 
             "messages": new_messages,
-            "current_node": 2
+            "current_node": 2,
+            "next_node": False
         }
 
 def ask_phone(state: State) -> State:

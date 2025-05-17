@@ -13,6 +13,7 @@ class State(TypedDict):
     current_node: int | None
     user_info: dict | None
     user_name: str | None
+    next_node: bool
 
 def process_user_input(state: State) -> State:
     return state
@@ -25,6 +26,17 @@ def router(state: State):
     next_node = getNext(current_node)
     return next_node
 
+def run_next_node(state: State):
+    if state["next_node"]:
+        current_node = state["current_node"] if "current_node" in state else 0
+        getNext = generate_router_function(Nodes, Edges)
+        next_node = getNext(current_node)
+        state["next_node"] = False
+        return next_node
+    else:
+        state["next_node"] = False
+        return END
+
 def build_graph():
     builder = StateGraph(State)
     
@@ -32,12 +44,12 @@ def build_graph():
         curr_node = node["type"] + "-" + node["id"]
         node_func = NODE_MAP[node["type"]]
         builder.add_node(curr_node, node_func)
+        builder.add_conditional_edges(curr_node, run_next_node)
 
     builder.add_node("process_input", process_user_input)
     
     builder.set_entry_point("process_input")
 
-    builder.add_edge("startingPoint-1", "process_input")
     builder.add_conditional_edges("process_input", router)
     
     conn = sqlite3.connect("checkpoints.sqlite", check_same_thread=False)
@@ -51,7 +63,7 @@ class ChatBot:
         self.exists = False
     
     def chat(self, user_input: str):
-        initial_state = {"messages": []}
+        initial_state = {"messages": [], "next_node": False}
         
         if not self.exists:
             initial_state["messages"].append({'role':'system', 'content':"You are an AI chatbot who helps users with their inquiries, issues and requests. Give concise and to the point response."})
