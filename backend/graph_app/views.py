@@ -95,3 +95,44 @@ def chat_history(request):
         return JsonResponse({"messages": all_msg}, status=201)
     except Message.DoesNotExist:
         return JsonResponse({'error': 'Node not found'}, status=404)
+
+import os, sqlite3
+
+@require_http_methods(["GET"])
+def delete_history(request):
+    try:
+        Message.objects.all().delete()
+
+        def delete_thread_rows(db_path='checkpoints.sqlite', thread_id="101", table_name='checkpoints'):
+            if not os.path.exists(db_path):
+                print(f"Error: File '{db_path}' not found.")
+                return
+
+            try:
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+
+                # Check if the table exists
+                cursor.execute(f"""
+                    SELECT name FROM sqlite_master WHERE type='table' AND name=?;
+                """, (table_name,))
+                if not cursor.fetchone():
+                    print(f"Error: Table '{table_name}' not found in database.")
+                    return
+
+                # Perform the delete operation
+                cursor.execute(f"DELETE FROM {table_name}")
+                conn.commit()
+                print(f"Deleted rows with thread_id={thread_id} from table '{table_name}'.")
+            except sqlite3.Error as e:
+                print(f"SQLite error: {e}")
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+            
+        delete_thread_rows()
+
+
+        return JsonResponse({"messages": "Delete successfully"}, status=200)
+    except Message.DoesNotExist:
+        return JsonResponse({'error': 'Node not found'}, status=404)
