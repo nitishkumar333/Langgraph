@@ -21,6 +21,7 @@ class Chatbot:
         current_node: int | None
         user_info: dict | None
         user_name: str | None
+        phone_number: str | None
         next_node: bool
     
     def process_user_input(self, state: State) -> State:
@@ -30,6 +31,8 @@ class Chatbot:
         current_node = state["current_node"] if "current_node" in state else 0
         getNext = generate_router_function(self.nodes, self.edges)
         if current_node == 2 and "user_name" not in state:
+            return getNext(current_node, get_current=True)
+        if current_node == 3 and "phone_number" not in state:
             return getNext(current_node, get_current=True)
         next_node = getNext(current_node)
         return next_node
@@ -75,7 +78,7 @@ class Chatbot:
         elif user_input is not None:
             Message.objects.create(content=user_input, type="user")
             initial_state["messages"].append({'role':'human', 'content':user_input})
-
+        
         result = self.graph.invoke(initial_state, {"configurable": {"thread_id": "101"}})
         print('--------------')
         print("Bot:", result)

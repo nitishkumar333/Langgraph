@@ -24,7 +24,12 @@ class UserName(BaseModel):
     name: str | None = Field(description="User's name")
     found_name: bool = Field(description="True if we found name, else false")
 
-parser = JsonOutputParser(pydantic_object=UserName)
+class PhoneNumber(BaseModel):
+    phone_number: str | None = Field(description="Phone number")
+    found: bool = Field(description="True if we found phone number, else false")
+
+parserName = JsonOutputParser(pydantic_object=UserName)
+parserPhone = JsonOutputParser(pydantic_object=PhoneNumber)
 
 def starting_point(state: State) -> State:
     messages = state["messages"]
@@ -45,9 +50,9 @@ def ask_name(state: State) -> State:
         prompt = PromptTemplate(
             template="Extract the person's name from this input, if present. If no name is found, return 'NONE'. \n{format_instructions}\n{query}\n",
             input_variables=["query"],
-            partial_variables={"format_instructions": parser.get_format_instructions()},
+            partial_variables={"format_instructions": parserName.get_format_instructions()},
         )
-        llm_json = prompt | llm | parser
+        llm_json = prompt | llm | parserName
         try:
             response = llm_json.invoke({"query": user_response})
             result = response
@@ -90,6 +95,55 @@ def ask_name(state: State) -> State:
 def ask_phone(state: State) -> State:
     llm = ChatGroq(model="gemma2-9b-it", temperature=0.1)
     messages = state["messages"]
+    if messages and isinstance(messages[-1], HumanMessage) and "phone_number" not in state:
+        user_response = messages[-1].content
+        prompt = PromptTemplate(
+            template="Extract the person's phone number from this input, if present. If no phone number is found, return 'NONE'. \n{format_instructions}\n{query}\n",
+            input_variables=["query"],
+            partial_variables={"format_instructions": parserPhone.get_format_instructions()},
+        )
+        llm_json = prompt | llm | parserPhone
+        try:
+            response = llm_json.invoke({"query": user_response})
+            result = response
+            if "phone_number" in result and result["phone_number"] != 'NONE':
+                phone_number = result["phone_number"]
+                Message.objects.create(content=f"Thank you! Let's proceed.", type="bot")
+                return {
+                    **state,
+                    "messages": messages + [AIMessage(content=f"Thank you! Let's proceed.")],
+                    "current_node": 3,
+                    "phone_number": phone_number,
+                    "next_node": True
+                }
+            else:
+                Message.objects.create(content="I didn't catch your number. Could you please share your phone number?", type="bot")
+                return {
+                    **state,
+                    "messages": messages + [AIMessage(content="I didn't catch your number. Could you please share it?")],
+                    "next_node": False
+                }
+        except Exception as e :
+            print(f"Error: {e}")
+            return "Some unexpected error occured."
+    else:
+        response = llm.invoke(
+            messages + [
+                HumanMessage(content="Generate a message asking for the user's phone number. Be friendly and polite.")
+            ]
+        )
+        Message.objects.create(content=response.content, type="bot")
+        new_messages = add_messages(messages, AIMessage(content=response.content))
+        return {
+            **state, 
+            "messages": new_messages,
+            "current_node": 3,
+            "next_node": False
+        }
+
+def ask_email(state: State) -> State:
+    llm = ChatGroq(model="gemma2-9b-it", temperature=0.1)
+    messages = state["messages"]
     
     # This is a simple implementation - in a real app you might want more robust parsing
     last_user_message = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
@@ -100,7 +154,7 @@ def ask_phone(state: State) -> State:
     
     response = llm.invoke(
         messages + [
-            HumanMessage(content=f"Generate a message asking for {user_name}'s phone number. Be friendly and polite.")
+            HumanMessage(content=f"Generate a message asking for {user_name}'s email address. Be friendly and polite.")
         ]
     )
     Message.objects.create(content=response.content, type="bot")
@@ -109,7 +163,7 @@ def ask_phone(state: State) -> State:
     return {
         **state, 
         "messages": new_messages,
-        "current_node": 3,  # Now we're at the ask phone node
+        "current_node": 1748765071206,  # Now we're at the ask phone node
         "user_info": user_info
     }
 
@@ -117,6 +171,7 @@ NODE_MAP = {
     "startingPoint": starting_point,
     "askName": ask_name,
     "askPhone": ask_phone,
+    "askEmail": ask_email
 }
 
 def generate_router_function(nodes, edges, ):

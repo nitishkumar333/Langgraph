@@ -60,6 +60,17 @@ def node_detail(request, pk):
     return JsonResponse({'message': 'Node deleted'})
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def get_node_and_edges(request):
+    try:
+        nodes = Node.objects.first()
+        edges = Edge.objects.first()
+    except Edge.DoesNotExist or Node.DoesNotExist:
+        return JsonResponse({'error': 'Node or Edge not found'}, status=404)
+
+    return JsonResponse({"nodes": nodes.data, "edges": edges.data}, safe=False)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def chat_ai(request):
     try:
@@ -75,7 +86,6 @@ def chat_ai(request):
         data = json.loads(request.body)
         if not isinstance(data.get('query'), str):
             return JsonResponse({'error': 'Invalid data format'}, status=400)
-
         chatbot = Chatbot(node.data, edge.data)
         response = chatbot.get_response(data["query"])
         
